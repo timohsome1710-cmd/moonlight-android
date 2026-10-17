@@ -108,6 +108,19 @@ public class ComputerDetails {
         }
     }
 
+    /** True for an address in Tailscale's (CGNAT) range, 100.64.0.0/10. */
+    static boolean isTailscaleAddress(String address) {
+        if (address == null) return false;
+        String[] p = address.split("\\.");
+        if (p.length != 4) return false;
+        try {
+            int a = Integer.parseInt(p[0]), b = Integer.parseInt(p[1]);
+            return a == 100 && b >= 64 && b <= 127;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
     public void update(ComputerDetails details) {
         this.state = details.state;
         this.name = details.name;
@@ -115,8 +128,12 @@ public class ComputerDetails {
         if (details.activeAddress != null) {
             this.activeAddress = details.activeAddress;
         }
-        // We can get IPv4 loopback addresses with GS IPv6 Forwarder
-        if (details.localAddress != null && !details.localAddress.address.startsWith("127.")) {
+        // We can get IPv4 loopback addresses with GS IPv6 Forwarder.
+        // A Tailscale address (100.64.0.0/10) isn't the home network: keep the real local address,
+        // so Moonlight uses home Wi-Fi when it's reachable and the manual (Tailscale) address otherwise.
+        if (details.localAddress != null && !details.localAddress.address.startsWith("127.")
+                && !(isTailscaleAddress(details.localAddress.address) && this.localAddress != null
+                     && !isTailscaleAddress(this.localAddress.address))) {
             this.localAddress = details.localAddress;
         }
         if (details.remoteAddress != null) {

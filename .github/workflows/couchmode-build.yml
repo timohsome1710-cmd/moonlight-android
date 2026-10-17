@@ -1,0 +1,37 @@
+# Builds this fork's Moonlight as an APK (release, unsigned) on every push to the "couchmode" branch.
+# The APK is attached to the run as an artifact; it gets signed afterwards so it can be installed.
+name: Build APK (couchmode)
+
+on:
+  push:
+    branches: [couchmode]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Android SDK packages
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-37" "ndk;29.0.14206865" || true
+
+      - name: Build release APK (unsigned)
+        run: ./gradlew --no-daemon --stacktrace assembleNonRootRelease
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moonlight-couchmode-unsigned
+          path: app/build/outputs/apk/nonRoot/release/*.apk
+          if-no-files-found: error
