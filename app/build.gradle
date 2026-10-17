@@ -119,8 +119,8 @@ android {
             //
             // TL;DR: Leave the following line alone!
             applicationIdSuffix ".unofficial"
-            resValue "string", "app_label", "Moonlight"
-            resValue "string", "app_label_root", "Moonlight (Root)"
+            resValue "string", "app_label", "Moonlight CM"
+            resValue "string", "app_label_root", "Moonlight CM (Root)"
 
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
