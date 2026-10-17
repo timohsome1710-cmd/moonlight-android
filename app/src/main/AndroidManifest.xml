@@ -42,6 +42,11 @@
         android:name="android.hardware.type.pc"
         android:required="false"/>
 
+    <!-- Moonlight CM: asks the CouchMode app for its link (the user allows it) for the CouchMode panel -->
+    <queries>
+        <package android:name="com.couchmode.remote" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"

@@ -36,6 +36,7 @@ public class PreferenceConfiguration {
     private static final String HOST_AUDIO_PREF_STRING = "checkbox_host_audio";
     private static final String FOLLOW_COUCHMODE_PREF_STRING = "checkbox_follow_couchmode"; // Moonlight CM
     private static final String MUTE_WHEN_PC_PLAYS_PREF_STRING = "checkbox_mute_when_pc_plays"; // Moonlight CM
+    private static final String COUCHMODE_PANEL_PREF_STRING = "checkbox_couchmode_panel"; // Moonlight CM
     private static final String DEADZONE_PREF_STRING = "seekbar_deadzone";
     private static final String OSC_OPACITY_PREF_STRING = "seekbar_osc_opacity";
     private static final String LANGUAGE_PREF_STRING = "list_languages";
@@ -80,6 +81,7 @@ public class PreferenceConfiguration {
     private static final boolean DEFAULT_HOST_AUDIO = false;
     private static final boolean DEFAULT_FOLLOW_COUCHMODE = true;
     private static final boolean DEFAULT_MUTE_WHEN_PC_PLAYS = true;
+    private static final boolean DEFAULT_COUCHMODE_PANEL = true;
     private static final int DEFAULT_DEADZONE = 7;
     private static final int DEFAULT_OPACITY = 90;
     public static final String DEFAULT_LANGUAGE = "default";
@@ -146,6 +148,7 @@ public class PreferenceConfiguration {
     public boolean latencyGraph; // Moonlight CM: record stats and show a graph when the stream ends
     public boolean followCouchMode; // Moonlight CM: "Play audio on PC" from CouchMode's sound choice
     public boolean muteWhenPcPlays; // Moonlight CM: this phone stays silent when CouchMode puts the sound on the PC
+    public boolean couchModePanel; // Moonlight CM: handle on the left edge that slides in CouchMode's panel
     public boolean bindAllUsb;
     public boolean mouseEmulation;
     public AnalogStickForScrolling analogStickForScrolling;
@@ -586,6 +589,7 @@ public class PreferenceConfiguration {
         config.playHostAudio = prefs.getBoolean(HOST_AUDIO_PREF_STRING, DEFAULT_HOST_AUDIO);
         config.followCouchMode = prefs.getBoolean(FOLLOW_COUCHMODE_PREF_STRING, DEFAULT_FOLLOW_COUCHMODE);
         config.muteWhenPcPlays = prefs.getBoolean(MUTE_WHEN_PC_PLAYS_PREF_STRING, DEFAULT_MUTE_WHEN_PC_PLAYS);
+        config.couchModePanel = prefs.getBoolean(COUCHMODE_PANEL_PREF_STRING, DEFAULT_COUCHMODE_PANEL);
         config.smallIconMode = prefs.getBoolean(SMALL_ICONS_PREF_STRING, getDefaultSmallMode(context));
         config.multiController = prefs.getBoolean(MULTI_CONTROLLER_PREF_STRING, DEFAULT_MULTI_CONTROLLER);
         config.usbDriver = prefs.getBoolean(USB_DRIVER_PREF_SRING, DEFAULT_USB_DRIVER);

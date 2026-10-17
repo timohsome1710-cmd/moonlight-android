@@ -210,6 +210,11 @@
             android:summary="@string/summary_follow_couchmode"
             android:defaultValue="true" />
         <CheckBoxPreference
+            android:key="checkbox_couchmode_panel"
+            android:title="@string/title_couchmode_panel"
+            android:summary="@string/summary_couchmode_panel"
+            android:defaultValue="true" />
+        <CheckBoxPreference
             android:key="checkbox_mute_when_pc_plays"
             android:dependency="checkbox_follow_couchmode"
             android:title="@string/title_mute_when_pc_plays"

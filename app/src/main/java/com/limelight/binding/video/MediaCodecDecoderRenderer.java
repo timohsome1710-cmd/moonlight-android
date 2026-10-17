@@ -1421,6 +1421,16 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
             if (prefs.latencyGraph) {
                 LatencyLog.add(activeWindowVideoStats, MoonBridge.getEstimatedRttInfo()); // Moonlight CM
             }
+            {
+                // Moonlight CM: latest numbers for the CouchMode panel's header
+                VideoStats w = activeWindowVideoStats;
+                float secs = w.measurementStartTimestamp > 0 ? (SystemClock.uptimeMillis() - w.measurementStartTimestamp) / 1000f : 1f;
+                long rtt = MoonBridge.getEstimatedRttInfo();
+                LiveStats.update((int) (rtt >> 32),
+                        secs > 0 ? w.totalFramesRendered / secs : -1,
+                        w.totalFrames > 0 ? w.framesLost * 100f / w.totalFrames : 0,
+                        w.totalFramesReceived > 0 ? (float) w.decoderTimeMs / w.totalFramesReceived : -1);
+            }
 
             globalVideoStats.add(activeWindowVideoStats);
             lastWindowVideoStats.copy(activeWindowVideoStats);

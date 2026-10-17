@@ -236,6 +236,8 @@
     <string name="summary_checkbox_host_audio">Play audio from the computer and this device</string>
     <string name="title_follow_couchmode">Follow CouchMode\'s sound choice</string>
     <string name="summary_follow_couchmode">If CouchMode runs on the PC, each stream sets Play audio on PC from its choice: Laptop on, Phone off, Auto on at home and off through Tailscale. Without CouchMode the setting above is used</string>
+    <string name="title_couchmode_panel">CouchMode panel while streaming</string>
+    <string name="summary_couchmode_panel">A handle on the left edge slides in CouchMode\'s tools: laptop screen, sound, resolution, Legion mode, power</string>
     <string name="title_mute_when_pc_plays">Keep this phone silent when the PC plays the sound</string>
     <string name="summary_mute_when_pc_plays">When CouchMode puts the sound on the laptop (its speakers or headset), this phone plays nothing</string>
 

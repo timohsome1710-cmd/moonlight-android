@@ -33,6 +33,7 @@ import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.ui.GameGestures;
 import com.limelight.ui.StreamView;
 import com.limelight.utils.CouchModeSound;
+import com.limelight.ui.CouchModePanel;
 import com.limelight.utils.Dialog;
 import com.limelight.utils.ServerHelper;
 import com.limelight.utils.ShortcutHelper;
@@ -65,6 +66,7 @@ import android.os.IBinder;
 import android.util.Rational;
 import android.view.Display;
 import android.view.InputDevice;
+import android.view.ViewGroup;
 import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -121,6 +123,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private NvConnection conn;
     private SpinnerDialog spinner;
     private int couchModeSound = CouchModeSound.UNKNOWN; // Moonlight CM: where CouchMode wants the sound
+    private CouchModePanel couchPanel; // Moonlight CM: CouchMode's side panel (handle on the left edge)
     private boolean displayedFailureDialog = false;
     private boolean connecting = false;
     private boolean connected = false;
@@ -314,6 +317,14 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         pcName = Game.this.getIntent().getStringExtra(EXTRA_PC_NAME);
 
         String host = Game.this.getIntent().getStringExtra(EXTRA_HOST);
+
+        // Moonlight CM: CouchMode's side panel, slid in from a handle on the left edge
+        if (prefConfig.couchModePanel) {
+            couchPanel = new CouchModePanel(this, host, new Runnable() {
+                @Override public void run() { streamView.requestFocus(); }
+            });
+            couchPanel.attach((ViewGroup) findViewById(android.R.id.content));
+        }
         int port = Game.this.getIntent().getIntExtra(EXTRA_PORT, NvHTTP.DEFAULT_HTTP_PORT);
         int httpsPort = Game.this.getIntent().getIntExtra(EXTRA_HTTPS_PORT, 0); // 0 is treated as unknown
         int appId = Game.this.getIntent().getIntExtra(EXTRA_APP_ID, StreamConfiguration.INVALID_APP_ID);
@@ -1048,6 +1059,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     protected void onDestroy() {
         super.onDestroy();
 
+        if (couchPanel != null) {
+            couchPanel.destroy();
+        }
+
         if (controllerHandler != null) {
             controllerHandler.destroy();
         }
@@ -1342,7 +1357,21 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        // Moonlight CM: Back slides the CouchMode panel out instead of leaving the stream
+        if (keyCode == KeyEvent.KEYCODE_BACK && couchPanel != null && couchPanel.isOpen()
+                && (event.getFlags() & KeyEvent.FLAG_VIRTUAL_HARD_KEY) == 0
+                && event.getSource() != InputDevice.SOURCE_MOUSE && event.getSource() != InputDevice.SOURCE_MOUSE_RELATIVE) {
+            couchPanel.close();
+            return true;
+        }
         return handleKeyDown(event) || super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        // Moonlight CM: the CouchMode app handing over its link for the panel
+        if (couchPanel != null && couchPanel.onActivityResult(requestCode, resultCode, data)) return;
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override
