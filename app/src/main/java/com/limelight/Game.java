@@ -32,6 +32,7 @@ import com.limelight.preferences.GlPreferences;
 import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.ui.GameGestures;
 import com.limelight.ui.StreamView;
+import com.limelight.utils.CouchModeSound;
 import com.limelight.utils.Dialog;
 import com.limelight.utils.ServerHelper;
 import com.limelight.utils.ShortcutHelper;
@@ -119,6 +120,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     private NvConnection conn;
     private SpinnerDialog spinner;
+    private int couchModeSound = CouchModeSound.UNKNOWN; // Moonlight CM: where CouchMode wants the sound
     private boolean displayedFailureDialog = false;
     private boolean connecting = false;
     private boolean connected = false;
@@ -463,6 +465,15 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             }
         }
 
+        // Moonlight CM: "Play audio on PC" follows CouchMode's Laptop / Auto / Phone choice when it runs on the PC
+        boolean playHostAudio = prefConfig.playHostAudio;
+        couchModeSound = CouchModeSound.UNKNOWN;
+        if (prefConfig.followCouchMode) {
+            couchModeSound = CouchModeSound.ask(host, 700);
+            if (couchModeSound == CouchModeSound.LAPTOP) playHostAudio = true;
+            else if (couchModeSound == CouchModeSound.PHONE) playHostAudio = false;
+        }
+
         StreamConfiguration config = new StreamConfiguration.Builder()
                 .setResolution(prefConfig.width, prefConfig.height)
                 .setLaunchRefreshRate(prefConfig.fps)
@@ -470,7 +481,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 .setApp(app)
                 .setBitrate(prefConfig.bitrate)
                 .setEnableSops(prefConfig.enableSops)
-                .enableLocalAudioPlayback(prefConfig.playHostAudio)
+                .enableLocalAudioPlayback(playHostAudio)
                 .setMaxPacketSize(1392)
                 .setRemoteConfiguration(StreamConfiguration.STREAM_CFG_AUTO) // NvConnection will perform LAN and VPN detection
                 .setSupportedVideoFormats(supportedVideoFormats)
@@ -2525,7 +2536,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             UiHelper.notifyStreamConnecting(Game.this);
 
             decoderRenderer.setRenderTarget(holder);
-            conn.start(new AndroidAudioRenderer(Game.this, prefConfig.enableAudioFx),
+            conn.start(new AndroidAudioRenderer(Game.this, prefConfig.enableAudioFx,
+                            prefConfig.muteWhenPcPlays && couchModeSound == CouchModeSound.LAPTOP),
                     decoderRenderer, Game.this);
         }
     }

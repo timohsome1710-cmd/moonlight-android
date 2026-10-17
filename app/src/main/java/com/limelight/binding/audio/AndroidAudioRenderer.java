@@ -20,9 +20,16 @@ public class AndroidAudioRenderer implements AudioRenderer {
 
     private AudioTrack track;
 
+    private final boolean muted; // Moonlight CM: the PC plays the sound (CouchMode), so this phone stays silent
+
     public AndroidAudioRenderer(Context context, boolean enableAudioFx) {
+        this(context, enableAudioFx, false);
+    }
+
+    public AndroidAudioRenderer(Context context, boolean enableAudioFx, boolean muted) {
         this.context = context;
         this.enableAudioFx = enableAudioFx;
+        this.muted = muted;
     }
 
     private AudioTrack createAudioTrack(int channelConfig, int sampleRate, int bufferSize, boolean lowLatency) {
@@ -160,6 +167,10 @@ public class AndroidAudioRenderer implements AudioRenderer {
 
             try {
                 track = createAudioTrack(channelConfig, sampleRate, bufferSize, lowLatency);
+                if (muted) {
+                    track.setVolume(0f);
+                    LimeLog.info("Audio muted on this device: CouchMode plays it on the PC");
+                }
                 track.play();
 
                 // Successfully created working AudioTrack. We're done here.
