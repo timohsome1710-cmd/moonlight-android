@@ -11,6 +11,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: write   # to publish the APK on the "apk" branch
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,3 +37,16 @@ jobs:
           name: moonlight-couchmode-unsigned
           path: app/build/outputs/apk/nonRoot/release/*.apk
           if-no-files-found: error
+
+      # Also put the APK on its own "apk" branch, so it can be fetched with plain git.
+      - name: Publish APK to the apk branch
+        run: |
+          mkdir out
+          cp app/build/outputs/apk/nonRoot/release/*.apk out/moonlight-couchmode-unsigned.apk
+          cd out
+          git init -q -b apk
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add moonlight-couchmode-unsigned.apk
+          git commit -q -m "APK built from ${GITHUB_SHA}"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" apk
