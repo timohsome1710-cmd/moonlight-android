@@ -27,12 +27,17 @@ public final class CouchModeSound {
 
     private CouchModeSound() {}
 
-    /** Asks CouchMode, waiting at most about timeoutMs. Safe to call from the UI thread (the request runs on its own). */
-    public static int ask(final String host, final int timeoutMs) {
+    /**
+     * Asks CouchMode, waiting at most about timeoutMs. Safe to call from the UI thread (the request runs
+     * on its own). Also tells CouchMode where this phone connects from and its own "Play audio on PC"
+     * (used when CouchMode has no choice), so CouchMode knows what this stream uses even when it's a
+     * resumed one (Sunshine runs no command then).
+     */
+    public static int ask(final String host, final int timeoutMs, final boolean ownHostAudio) {
         if (host == null || host.isEmpty()) return UNKNOWN;
         final AtomicInteger answer = new AtomicInteger(UNKNOWN);
         Thread t = new Thread(new Runnable() {
-            @Override public void run() { answer.set(fetch(host, timeoutMs)); }
+            @Override public void run() { answer.set(fetch(host, timeoutMs, ownHostAudio)); }
         }, "CouchMode sound");
         t.setDaemon(true);
         t.start();
@@ -42,11 +47,12 @@ public final class CouchModeSound {
         return answer.get();
     }
 
-    private static int fetch(String host, int timeoutMs) {
+    private static int fetch(String host, int timeoutMs, boolean ownHostAudio) {
         HttpURLConnection c = null;
         try {
             String h = host.contains(":") && !host.startsWith("[") ? "[" + host + "]" : host; // IPv6
-            URL u = new URL("http://" + h + ":" + COUCHMODE_PORT + "/couchmode/sound");
+            URL u = new URL("http://" + h + ":" + COUCHMODE_PORT + "/couchmode/sound?client=moonlight-cm"
+                    + "&tailscale=" + (isTailscale(host) ? "1" : "0") + "&fallback=" + (ownHostAudio ? "1" : "0"));
             c = (HttpURLConnection) u.openConnection();
             c.setConnectTimeout(timeoutMs);
             c.setReadTimeout(timeoutMs);

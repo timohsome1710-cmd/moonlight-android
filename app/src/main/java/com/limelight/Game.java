@@ -469,7 +469,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         boolean playHostAudio = prefConfig.playHostAudio;
         couchModeSound = CouchModeSound.UNKNOWN;
         if (prefConfig.followCouchMode) {
-            couchModeSound = CouchModeSound.ask(host, 700);
+            couchModeSound = CouchModeSound.ask(host, 700, prefConfig.playHostAudio);
             if (couchModeSound == CouchModeSound.LAPTOP) playHostAudio = true;
             else if (couchModeSound == CouchModeSound.PHONE) playHostAudio = false;
         }
