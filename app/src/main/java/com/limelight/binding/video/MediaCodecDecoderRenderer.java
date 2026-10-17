@@ -681,6 +681,14 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
         this.videoFormat = format;
         this.refreshRate = redrawRate;
 
+        // Moonlight CM: start a fresh latency recording for the post-stream graph
+        if (prefs.latencyGraph) {
+            String codec = (format & MoonBridge.VIDEO_FORMAT_MASK_AV1) != 0 ? "AV1"
+                    : (format & MoonBridge.VIDEO_FORMAT_MASK_H265) != 0 ? "HEVC" : "H.264";
+            if ((format & MoonBridge.VIDEO_FORMAT_MASK_10BIT) != 0) codec += " HDR";
+            LatencyLog.begin(width + "×" + height + " · " + codec);
+        }
+
         return initializeDecoder(false);
     }
 
@@ -1408,6 +1416,10 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                 }
                 sb.append(context.getString(R.string.perf_overlay_dectime, decodeTimeMs));
                 perfListener.onPerfUpdate(sb.toString());
+            }
+
+            if (prefs.latencyGraph) {
+                LatencyLog.add(activeWindowVideoStats, MoonBridge.getEstimatedRttInfo()); // Moonlight CM
             }
 
             globalVideoStats.add(activeWindowVideoStats);

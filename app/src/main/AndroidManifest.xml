@@ -179,6 +179,11 @@
             android:label="Usb Driver Service" />
 
         <activity
+            android:name=".LatencyGraphActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.NoActionBar"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity
             android:name=".HelpActivity"
             android:resizeableActivity="true"
             android:enableOnBackInvokedCallback="true"

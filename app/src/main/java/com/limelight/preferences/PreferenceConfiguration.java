@@ -60,6 +60,7 @@ public class PreferenceConfiguration {
     private static final String FLIP_FACE_BUTTONS_PREF_STRING = "checkbox_flip_face_buttons";
     private static final String TOUCHSCREEN_TRACKPAD_PREF_STRING = "checkbox_touchscreen_trackpad";
     private static final String LATENCY_TOAST_PREF_STRING = "checkbox_enable_post_stream_toast";
+    private static final String LATENCY_GRAPH_PREF_STRING = "checkbox_latency_graph"; // Moonlight CM
     private static final String FRAME_PACING_PREF_STRING = "frame_pacing";
     private static final String ABSOLUTE_MOUSE_MODE_PREF_STRING = "checkbox_absolute_mouse_mode";
     private static final String ENABLE_AUDIO_FX_PREF_STRING = "checkbox_enable_audiofx";
@@ -100,6 +101,7 @@ public class PreferenceConfiguration {
     private static final boolean DEFAULT_TOUCHSCREEN_TRACKPAD = true;
     private static final String DEFAULT_AUDIO_CONFIG = "2"; // Stereo
     private static final boolean DEFAULT_LATENCY_TOAST = false;
+    private static final boolean DEFAULT_LATENCY_GRAPH = false;
     private static final String DEFAULT_FRAME_PACING = "latency";
     private static final boolean DEFAULT_ABSOLUTE_MOUSE_MODE = false;
     private static final boolean DEFAULT_ENABLE_AUDIO_FX = false;
@@ -137,6 +139,7 @@ public class PreferenceConfiguration {
     public boolean enablePip;
     public boolean enablePerfOverlay;
     public boolean enableLatencyToast;
+    public boolean latencyGraph; // Moonlight CM: record stats and show a graph when the stream ends
     public boolean bindAllUsb;
     public boolean mouseEmulation;
     public AnalogStickForScrolling analogStickForScrolling;
@@ -594,6 +597,7 @@ public class PreferenceConfiguration {
         config.flipFaceButtons = prefs.getBoolean(FLIP_FACE_BUTTONS_PREF_STRING, DEFAULT_FLIP_FACE_BUTTONS);
         config.touchscreenTrackpad = prefs.getBoolean(TOUCHSCREEN_TRACKPAD_PREF_STRING, DEFAULT_TOUCHSCREEN_TRACKPAD);
         config.enableLatencyToast = prefs.getBoolean(LATENCY_TOAST_PREF_STRING, DEFAULT_LATENCY_TOAST);
+        config.latencyGraph = prefs.getBoolean(LATENCY_GRAPH_PREF_STRING, DEFAULT_LATENCY_GRAPH);
         config.absoluteMouseMode = prefs.getBoolean(ABSOLUTE_MOUSE_MODE_PREF_STRING, DEFAULT_ABSOLUTE_MOUSE_MODE);
         config.enableAudioFx = prefs.getBoolean(ENABLE_AUDIO_FX_PREF_STRING, DEFAULT_ENABLE_AUDIO_FX);
         config.reduceRefreshRate = prefs.getBoolean(REDUCE_REFRESH_RATE_PREF_STRING, DEFAULT_REDUCE_REFRESH_RATE);

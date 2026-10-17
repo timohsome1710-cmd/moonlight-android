@@ -14,6 +14,7 @@ import com.limelight.binding.input.evdev.EvdevListener;
 import com.limelight.binding.input.touch.TouchContext;
 import com.limelight.binding.input.virtual_controller.VirtualController;
 import com.limelight.binding.video.CrashListener;
+import com.limelight.binding.video.LatencyLog;
 import com.limelight.binding.video.MediaCodecDecoderRenderer;
 import com.limelight.binding.video.MediaCodecHelper;
 import com.limelight.binding.video.PerfOverlayListener;
@@ -1132,6 +1133,15 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
                 if (message != null) {
                     Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                }
+            }
+
+            // Moonlight CM: the latency graph of the stream that just ended
+            if (prefConfig.latencyGraph && LatencyLog.hasUnshown()) {
+                try {
+                    startActivity(new Intent(this, LatencyGraphActivity.class));
+                } catch (Exception e) {
+                    LimeLog.warning("Couldn't show the latency graph: " + e);
                 }
             }
 
