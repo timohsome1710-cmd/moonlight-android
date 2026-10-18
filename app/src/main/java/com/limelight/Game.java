@@ -124,6 +124,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private SpinnerDialog spinner;
     private int couchModeSound = CouchModeSound.UNKNOWN; // Moonlight CM: where CouchMode wants the sound
     private CouchModePanel couchPanel; // Moonlight CM: CouchMode's side panel (handle on the left edge)
+    private boolean couchPanelAteBack;
     private boolean displayedFailureDialog = false;
     private boolean connecting = false;
     private boolean connected = false;
@@ -1357,11 +1358,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        // Moonlight CM: Back slides the CouchMode panel out instead of leaving the stream
+        // Moonlight CM: while the CouchMode panel is out, Back (the back gesture or button included)
+        // belongs to the panel: a step back inside it, then it slides away. It never leaves the stream.
         if (keyCode == KeyEvent.KEYCODE_BACK && couchPanel != null && couchPanel.isOpen()
-                && (event.getFlags() & KeyEvent.FLAG_VIRTUAL_HARD_KEY) == 0
                 && event.getSource() != InputDevice.SOURCE_MOUSE && event.getSource() != InputDevice.SOURCE_MOUSE_RELATIVE) {
-            couchPanel.close();
+            if (event.getRepeatCount() == 0) couchPanel.back();
+            couchPanelAteBack = true;
             return true;
         }
         return handleKeyDown(event) || super.onKeyDown(keyCode, event);
@@ -1453,6 +1455,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK && couchPanelAteBack) {
+            couchPanelAteBack = false; // the panel took this Back; don't let it close the stream
+            return true;
+        }
         return handleKeyUp(event) || super.onKeyUp(keyCode, event);
     }
 

@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>CouchMode panel</title>
+<style>
+  @font-face { font-family: "Barlow"; font-weight: 400; font-display: swap; src: url("barlow-400.woff2") format("woff2"); }
+  @font-face { font-family: "Barlow"; font-weight: 500; font-display: swap; src: url("barlow-500.woff2") format("woff2"); }
+  @font-face { font-family: "Barlow"; font-weight: 600; font-display: swap; src: url("barlow-600.woff2") format("woff2"); }
+
+  /* The side panel Moonlight CM slides in over a stream, laid out like a phone's game assistant:
+     a narrow rail of sections, and a card with live numbers and tool tiles. Sized for a landscape
+     phone (about 400 x 360 CSS px). Flat colours only (no blur), so it costs the stream nothing. */
+  :root {
+    --card: rgba(27, 27, 29, .97);
+    --tile: #2c2c2f;
+    --tile-press: #36363a;
+    --well: rgba(255, 255, 255, .045);
+    --line: rgba(255, 255, 255, .07);
+    --ink: #f2f2ef;
+    --dim: #9b9ca1;
+    --faint: #6e6f74;
+    --accent: #f5a524;
+    --accent-soft: rgba(245, 165, 36, .14);
+    --on-accent: #17130c;
+    --good: #72d46c;
+    --warn: #ffc845;
+    --bad: #ff6b6b;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: transparent; color: var(--ink); overflow: hidden; }
+  body { font: 400 13px/1.3 "Barlow", system-ui, sans-serif; -webkit-user-select: none; user-select: none; font-variant-numeric: tabular-nums; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; text-align: inherit; }
+  button:disabled { opacity: .4; cursor: default; }
+  [hidden] { display: none !important; }
+  svg { display: block; flex: none; }
+
+  .shell { display: flex; gap: 8px; height: 100%; padding: 10px 10px 10px max(10px, env(safe-area-inset-left)); }
+
+  /* ---------------------------------------------------------------- rail */
+  .rail {
+    flex: none; width: 62px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 10px 0; background: var(--card); border-radius: 31px; overflow: hidden;
+  }
+  .rail .tab {
+    width: 56px; flex: 0 1 auto; min-height: 0; padding: 6px 0 5px; border-radius: 16px; color: var(--dim);
+    display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; letter-spacing: .1px; text-align: center;
+    transition: color .12s;
+  }
+  .rail .tab svg { width: 23px; height: 23px; }
+  .rail .tab.on { color: var(--accent); }
+  .rail .tab:active { background: var(--well); }
+  .rail .grow { flex: 1 1 0; min-height: 4px; }
+  .rail .close { flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--tile); color: var(--dim); display: grid; place-items: center; }
+  .rail .close svg { width: 18px; height: 18px; }
+  .rail .close:active { background: var(--tile-press); }
+  @media (max-height: 330px) { .rail .close, .rail .grow { display: none; } }
+
+  /* ---------------------------------------------------------------- card */
+  .main {
+    flex: 1; min-width: 0; position: relative; background: var(--card); border-radius: 24px;
+    padding: 14px 14px 12px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+  }
+  .main::-webkit-scrollbar { display: none; }
+  .pane { animation: in .14s ease-out; }
+  @keyframes in { from { opacity: 0; transform: translateY(3px); } }
+
+  .head { display: flex; align-items: center; gap: 4px; margin: -3px 0 10px; min-height: 26px; }
+  .head h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .1px; }
+  .back { width: 26px; height: 26px; margin-left: -5px; border-radius: 13px; display: grid; place-items: center; color: var(--dim); }
+  .back svg { width: 18px; height: 18px; }
+  .back:active { background: var(--well); }
+  .label { margin: 12px 2px 6px; font-size: 11px; font-weight: 500; letter-spacing: .4px; text-transform: uppercase; color: var(--faint); }
+  .note { margin: 8px 2px 0; font-size: 11.5px; line-height: 1.35; color: var(--dim); }
+  .note:empty { display: none; }
+
+  /* Tools: live numbers, then tiles */
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0 2px 12px; }
+  .stat { min-width: 0; }
+  .stat:nth-child(2) { text-align: center; }
+  .stat:nth-child(3) { text-align: right; }
+  .stat .k { display: block; font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat .v { display: block; margin-top: 1px; font-size: 15px; font-weight: 600; color: var(--faint); white-space: nowrap; }
+  .stat .v small { font-size: 11px; font-weight: 500; margin-left: 1px; }
+  .stat .v.good { color: var(--good); } .stat .v.warn { color: var(--warn); } .stat .v.bad { color: var(--bad); } .stat .v.plain { color: var(--ink); }
+
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .tile {
+    position: relative; height: 72px; min-width: 0; padding: 9px 5px 7px; border-radius: 18px; background: var(--tile);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-align: center;
+    transition: background .12s, transform .12s;
+  }
+  .tile:active { transform: scale(.96); background: var(--tile-press); }
+  .tile svg { width: 21px; height: 21px; margin-bottom: 2px; }
+  .tile .t { max-width: 100%; font-size: 11.5px; font-weight: 500; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .s { max-width: 100%; font-size: 10.5px; line-height: 1.1; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile.on { background: var(--accent); color: var(--on-accent); }
+  .tile.on:active { background: #e09616; }
+  .tile.on .s { color: rgba(23, 19, 12, .72); }
+  .tile .more { position: absolute; top: 9px; right: 10px; width: 5px; height: 5px; border-right: 1.5px solid currentColor; border-top: 1.5px solid currentColor; transform: rotate(45deg); opacity: .45; }
+  .tile.busy { opacity: .55; }
+
+  /* Rows, switches and buttons used by the sections */
+  .seg { display: grid; grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); gap: 3px; padding: 3px; border-radius: 999px; background: var(--well); }
+  .seg button { padding: 8px 2px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--dim); text-align: center; }
+  .seg button.on { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .list { display: flex; flex-direction: column; border-radius: 16px; background: var(--well); overflow: hidden; }
+  .list + .list, .seg + .list { margin-top: 8px; }
+  .row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 8px 12px; text-align: left; }
+  .row + .row { border-top: 1px solid var(--line); }
+  button.row:active { background: var(--well); }
+  .row .name { flex: 1; min-width: 0; }
+  .row .name b { display: block; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .name span { display: block; margin-top: 1px; font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row.on .name span { color: var(--accent); }
+  .row .tick { width: 17px; height: 17px; color: var(--accent); }
+  .row .chev { width: 16px; height: 16px; color: var(--faint); }
+  .row .pill { flex: none; padding: 5px 11px; border-radius: 999px; background: var(--tile); font-size: 12px; font-weight: 500; }
+  .row .pill:active { background: var(--tile-press); }
+  .switch { flex: none; position: relative; width: 40px; height: 24px; border-radius: 999px; background: var(--tile); transition: background .15s; }
+  .switch i { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--dim); transition: transform .15s, background .15s; }
+  .row[aria-checked="true"] .switch { background: var(--accent); }
+  .row[aria-checked="true"] .switch i { transform: translateX(16px); background: var(--on-accent); }
+  .btn { display: block; width: 100%; margin-top: 8px; padding: 10px; border-radius: 999px; background: var(--tile); font-size: 13px; font-weight: 500; text-align: center; }
+  .btn:active { background: var(--tile-press); }
+  .btn.danger { color: #ff9a9e; background: rgba(255, 107, 107, .1); }
+  .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .mode { height: 62px; min-width: 0; padding: 0 3px; border-radius: 18px; background: var(--tile); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; font-size: 11.5px; font-weight: 600; letter-spacing: -.1px; text-align: center; }
+  .mode span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mode i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+  .mode.on { background: var(--accent); color: var(--on-accent); }
+  .modes + .list { margin-top: 8px; }
+
+  /* Confirm sheet, inside the card */
+  .main.asking { overflow: hidden; }
+  .confirm { position: absolute; inset: 0; background: #1b1b1d; border-radius: 24px; display: flex; flex-direction: column; justify-content: center; padding: 18px; z-index: 2; animation: in .14s ease-out; }
+  .confirm h3 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+  .confirm p { margin: 0 0 16px; color: var(--dim); font-size: 12.5px; line-height: 1.4; }
+  .confirm .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .confirm .two button { padding: 10px; border-radius: 999px; font-weight: 600; background: var(--tile); text-align: center; }
+  .confirm .two .go { background: var(--accent); color: var(--on-accent); }
+  .confirm .two .go.red { background: var(--bad); color: #1a0b0b; }
+
+  .offline { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 100%; text-align: center; color: var(--dim); padding: 12px; font-size: 12.5px; }
+  .offline svg { width: 30px; height: 30px; color: var(--faint); margin-bottom: 6px; }
+  .offline b { color: var(--ink); font-size: 14px; font-weight: 600; }
+  .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); max-width: 80%; background: #3a3a3e; padding: 7px 14px; border-radius: 999px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 3; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav class="rail" id="rail" aria-label="CouchMode">
+    <button class="tab on" data-tab="tools"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="3.5" y="3.5" width="7.5" height="7.5" rx="2.2"/><rect x="13" y="3.5" width="7.5" height="7.5" rx="2.2"/><rect x="3.5" y="13" width="7.5" height="7.5" rx="2.2"/><rect x="13" y="13" width="7.5" height="7.5" rx="2.2"/></svg>Tools</button>
+    <button class="tab" data-tab="sound"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>Sound</button>
+    <button class="tab" data-tab="display"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20h8M12 16.5V20"/></svg>Display</button>
+    <button class="tab" data-tab="legion" id="railLegion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13.5 16.5 9"/><path d="M4.5 18a9 9 0 1 1 15 0"/></svg>Legion</button>
+    <button class="tab" data-tab="power"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.9a8 8 0 1 0 11.4 0"/></svg>Power</button>
+    <span class="grow"></span>
+    <button class="close" id="closeBtn" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></svg></button>
+  </nav>
+
+  <main class="main" id="main">
+    <div class="offline" id="offline" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.5a14 14 0 0 1 19 0"/><path d="M5.5 12a9.5 9.5 0 0 1 13 0"/><path d="M8.7 15.4a5 5 0 0 1 6.6 0"/><path d="M12 19h.01"/><path d="m3 3 18 18"/></svg>
+      <b>Can't reach CouchMode</b><span id="offlineText">Is it running on the laptop? Trying again…</span>
+    </div>
+
+    <!-- Tools -->
+    <section class="pane" data-pane="tools">
+      <div class="stats">
+        <div class="stat"><span class="k">Network</span><span class="v" id="statNet">–</span></div>
+        <div class="stat"><span class="k">Frame rate</span><span class="v" id="statFps">–</span></div>
+        <div class="stat"><span class="k" id="statLaptopK">Laptop</span><span class="v" id="statLaptop">–</span></div>
+      </div>
+      <div class="grid" id="grid"></div>
+      <p class="note" id="toolsNote"></p>
+    </section>
+
+    <!-- Sound -->
+    <section class="pane" data-pane="sound" hidden>
+      <div class="head"><h2>Sound</h2></div>
+      <div class="seg" id="soundSeg" style="--n:3">
+        <button data-sound="laptop">Laptop</button><button data-sound="auto">Auto</button><button data-sound="phone">Phone</button>
+      </div>
+      <p class="label">Laptop output</p>
+      <div class="list" id="outList"></div>
+      <div class="list" id="btEntry">
+        <button class="row" data-goto="bt"><span class="name"><b>Bluetooth headset</b><span id="btEntrySub"></span></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9.5 6 6 6-6 6"/></svg></button>
+      </div>
+      <button class="btn" id="testSound">Play a test tone</button>
+      <p class="note" id="soundNote"></p>
+    </section>
+
+    <!-- Display -->
+    <section class="pane" data-pane="display" hidden>
+      <div class="head"><h2>Stream resolution</h2></div>
+      <div class="list">
+        <button class="row" id="resAuto" role="switch" aria-checked="false"><span class="name"><b>Match the phone</b><span id="resAutoSub"></span></span><span class="switch"><i></i></span></button>
+      </div>
+      <div class="list" id="resList"></div>
+      <button class="btn" id="resRestore">Back to the laptop's own resolution</button>
+      <p class="note" id="resNote"></p>
+    </section>
+
+    <!-- Legion -->
+    <section class="pane" data-pane="legion" hidden>
+      <div class="head"><h2>Legion mode</h2></div>
+      <div class="modes" id="modes"></div>
+      <div class="list">
+        <button class="row" id="legionAuto" role="switch" aria-checked="false"><span class="name"><b>Performance while streaming</b><span>Switches back when you stop</span></span><span class="switch"><i></i></span></button>
+      </div>
+      <p class="note" id="legionNote"></p>
+    </section>
+
+    <!-- Bluetooth (from the Sound section or the Bluetooth tile) -->
+    <section class="pane" data-pane="bt" hidden>
+      <div class="head"><button class="back" id="btBack" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></svg></button><h2>Bluetooth</h2></div>
+      <div class="list">
+        <button class="row" id="btRadio" role="switch" aria-checked="false"><span class="name"><b>Laptop Bluetooth</b><span id="btRadioSub"></span></span><span class="switch"><i></i></span></button>
+      </div>
+      <div class="list" id="btList"></div>
+      <p class="note" id="btNote"></p>
+    </section>
+
+    <!-- Power -->
+    <section class="pane" data-pane="power" hidden>
+      <div class="head"><h2>Power</h2></div>
+      <div class="list" id="plugBox">
+        <button class="row" id="plugRow" role="switch" aria-checked="false"><span class="name"><b>Smart plug</b><span id="plugSub"></span></span><span class="switch"><i></i></span></button>
+        <button class="row" id="plugAuto" role="switch" aria-checked="false"><span class="name"><b>Cut power after turning off</b><span>A few seconds after shutdown</span></span><span class="switch"><i></i></span></button>
+      </div>
+      <div class="list">
+        <button class="row" id="awakeRow" role="switch" aria-checked="false"><span class="name"><b>Keep awake while charging</b><span>So the phone can always reach it</span></span><span class="switch"><i></i></span></button>
+        <button class="row" id="tsRow" role="switch" aria-checked="false"><span class="name"><b>Tailscale</b><span id="tsSub"></span></span><span class="switch"><i></i></span></button>
+        <button class="row" id="sunRow"><span class="name"><b id="sunName">Restart Sunshine</b><span id="sunSub">Ends this stream</span></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9.5 6 6 6-6 6"/></svg></button>
+      </div>
+      <button class="btn danger" id="offBtn">Turn off laptop</button>
+      <p class="note" id="powerNote"></p>
+    </section>
+
+    <div class="confirm" id="confirm" hidden>
+      <h3 id="confirmTitle"></h3>
+      <p id="confirmText"></p>
+      <div class="two"><button id="confirmNo">Cancel</button><button class="go" id="confirmYes">OK</button></div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
+  var state = null, busy = false, shown = true, pollTimer = null, statsTimer = null, failures = 0, confirmAction = null;
+  var current = 'tools', backTo = 'tools';
+  var MODES = { 1: { name: 'Quiet', color: '#4ea8ff' }, 2: { name: 'Balanced', color: '#f2f2ef' }, 3: { name: 'Performance', color: '#ff6b6b' } };
+  var TICK = '<svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+  var ICONS = {
+    screen: '<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8 20h8M12 16.5V20"/><path d="M4 4l16 13"/>',
+    sound: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+    res: '<path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/>',
+    legion: '<path d="M12 13.5 16.5 9"/><path d="M4.5 18a9 9 0 1 1 15 0"/>',
+    awake: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+    test: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+    bt: '<path d="m7 7 10 10-5 4V3l5 4L7 17"/>',
+    sunshine: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4.5h-4.5"/>',
+    off: '<path d="M12 3v8"/><path d="M6.3 6.9a8 8 0 1 0 11.4 0"/>'
+  };
+
+  function app() { return window.MoonlightCM || null; }
+
+  function request(method, path) {
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var t = setTimeout(function () { if (ctrl) ctrl.abort(); }, 5000);
+    return fetch(path, { method: method, cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
+      .then(function (r) { clearTimeout(t); if (!r.ok) throw new Error(String(r.status)); return r.json(); });
+  }
+
+  // CouchMode answers 404 to a link whose token it doesn't know: Moonlight CM asks for the link again.
+  function rejected(e) {
+    if (!e || e.message !== '404') return false;
+    var m = app();
+    if (m && m.linkRejected) { m.linkRejected(); return true; }
+    return false;
+  }
+
+  function poll() {
+    clearTimeout(pollTimer);
+    if (!shown) return;
+    request('GET', 'api/status').then(function (s) {
+      state = s; failures = 0; render();
+    }).catch(function (e) {
+      if (rejected(e)) return;
+      failures++; if (failures >= 2) render();
+    }).then(function () { if (shown) pollTimer = setTimeout(poll, 2000); });
+  }
+
+  function act(path, toastText) {
+    busy = true; render();
+    return request('POST', 'api/' + path).then(function (s) { state = s; failures = 0; if (toastText) toast(toastText); })
+      .catch(function (e) { if (!rejected(e)) toast('Couldn\'t reach the laptop'); })
+      .then(function () { busy = false; render(); setTimeout(poll, 500); });
+  }
+
+  function toast(text) {
+    var t = $('toast'); t.textContent = text; t.hidden = false;
+    clearTimeout(toast.timer); toast.timer = setTimeout(function () { t.hidden = true; }, 1800);
+  }
+
+  function ask(title, text, yes, red, fn) {
+    $('confirmTitle').textContent = title; $('confirmText').textContent = text;
+    $('confirmYes').textContent = yes; $('confirmYes').className = 'go' + (red ? ' red' : '');
+    confirmAction = fn; $('main').scrollTop = 0; $('main').classList.add('asking'); $('confirm').hidden = false;
+  }
+  function hideConfirm() {
+    $('confirm').hidden = true; $('main').classList.remove('asking'); confirmAction = null;
+  }
+
+  // --------------------------------------------------------------- sections
+  function showTab(name, from) {
+    if (name === 'bt') backTo = from || current;
+    current = name;
+    hideConfirm();
+    each(document.querySelectorAll('[data-pane]'), function (p) { p.hidden = p.getAttribute('data-pane') !== name; });
+    var railName = name === 'bt' ? backTo : name;
+    each($('rail').querySelectorAll('.tab'), function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === railName); });
+    $('main').scrollTop = 0;
+    if (name === 'bt' && state && state.bluetooth && !state.streaming) act('bt/refresh');
+  }
+  each($('rail').querySelectorAll('.tab'), function (b) {
+    b.addEventListener('click', function () { showTab(b.getAttribute('data-tab')); });
+  });
+  $('btBack').addEventListener('click', function () { showTab(backTo === 'bt' ? 'tools' : backTo); });
+  $('closeBtn').addEventListener('click', function () { var m = app(); if (m && m.close) m.close(); });
+  document.addEventListener('click', function (e) {
+    var g = e.target.closest('[data-goto]'); if (g) showTab(g.getAttribute('data-goto'), current);
+  });
+
+  // --------------------------------------------------------------- render
+  function svg(path) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + path + '</svg>'; }
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function setHtml(el, html) { if (el.getAttribute('data-html') !== html) { el.innerHTML = html; el.setAttribute('data-html', html); } }
+
+  function legionAvailable(s) { var lg = s.legion || {}; return !!lg.state && lg.state !== 'none'; }
+  function btAvailable(s) { var bt = s.bluetooth || {}; return !!bt.radio && bt.radio !== 'none'; }
+
+  function connectedName(bt) {
+    var c = (bt.devices || []).filter(function (d) { return d.connected; });
+    return c.length ? c[0].name : 'On';
+  }
+
+  function tiles(s) {
+    var a = s.audio || {}, d = s.display || {}, lg = s.legion || {}, bt = s.bluetooth || {}, su = s.sunshine;
+    var soundName = { laptop: 'On laptop', auto: 'Auto', phone: 'On phone' }[a.stream] || 'Not set';
+    if (a.stream === 'auto' && s.streaming) soundName = 'Auto · ' + (a.effective === 'phone' ? 'phone' : 'laptop');
+    var list = [
+      { id: 'screen', t: 'Screen off', s: s.screenOff ? 'Laptop dark' : 'Laptop', on: !!s.screenOff },
+      { id: 'sound', t: 'Sound', s: soundName, tab: 'sound' },
+      { id: 'res', t: 'Resolution', s: d.current ? d.current.replace('x', '×') : '–', tab: 'display' },
+      { id: 'legion', t: 'Legion mode', s: lg.state === 'ok' ? (MODES[lg.mode] || {}).name || 'Custom' : 'Off', tab: 'legion', hide: !legionAvailable(s) },
+      { id: 'awake', t: 'Keep awake', s: s.keepAwake ? 'On' : 'Off', on: !!s.keepAwake },
+      { id: 'test', t: 'Test sound', s: 'Short tone' },
+      { id: 'bt', t: 'Bluetooth', s: bt.radio === 'on' ? connectedName(bt) : bt.radio === 'off' ? 'Off' : '–', tab: 'bt', hide: !btAvailable(s) },
+      { id: 'sunshine', t: su && su.name || 'Sunshine', s: su && su.state === 'restarting' ? 'Restarting…' : 'Restart', hide: !su || !su.installed, busy: su && su.state === 'restarting' },
+      { id: 'off', t: 'Turn off', s: 'Laptop' }
+    ];
+    var html = '';
+    list.forEach(function (x) {
+      if (x.hide) return;
+      html += '<button class="tile' + (x.on ? ' on' : '') + (x.busy ? ' busy' : '') + '" data-tool="' + x.id + '"' + (busy || x.busy ? ' disabled' : '') + '>'
+        + (x.tab ? '<i class="more"></i>' : '') + svg(ICONS[x.id]) + '<span class="t">' + esc(x.t) + '</span><span class="s">' + esc(x.s) + '</span></button>';
+    });
+    setHtml($('grid'), html);
+  }
+
+  function render() {
+    var off = failures >= 2 || !state;
+    $('offline').hidden = !off;
+    each(document.querySelectorAll('[data-pane]'), function (p) { p.style.display = off ? 'none' : ''; });
+    $('rail').style.visibility = '';
+    if (off) return;
+    var s = state;
+    $('railLegion').hidden = !legionAvailable(s);
+    if (current === 'legion' && !legionAvailable(s)) showTab('tools');
+    var b = s.battery || {};
+    $('statLaptopK').textContent = b.has ? 'Laptop battery' : 'Laptop';
+    var lv = $('statLaptop');
+    if (b.has) {
+      lv.innerHTML = b.pct + '<small>%' + (b.plugged ? ' ⚡' : '') + '</small>';
+      lv.className = 'v ' + (b.plugged || b.pct > 40 ? 'good' : b.pct > 15 ? 'warn' : 'bad');
+    } else {
+      lv.textContent = s.streaming ? (s.paused ? 'Paused' : 'Streaming') : 'Idle';
+      lv.className = 'v plain';
+    }
+    tiles(s);
+    var tn = '';
+    if (s.audio && s.audio.pinned && s.audio.effective === 'laptop') tn = 'Sunshine holds the sound on the phone for this stream. Start the stream again to switch.';
+    $('toolsNote').textContent = tn;
+    renderSound(s); renderDisplay(s); renderLegion(s); renderBt(s); renderPower(s);
+  }
+
+  function renderSound(s) {
+    var a = s.audio || {}, bt = s.bluetooth || {};
+    each($('soundSeg').children, function (btn) { btn.classList.toggle('on', btn.getAttribute('data-sound') === a.stream); btn.disabled = busy; });
+    var outs = (a.out || []).filter(function (d) { return !/steam streaming/i.test(d.name); });
+    setHtml($('outList'), outs.map(function (d) {
+      return '<button class="row' + (d.def ? ' on' : '') + '" data-out="' + esc(d.key) + '"' + (busy ? ' disabled' : '') + '><span class="name"><b>' + esc(d.name) + '</b><span>' + (d.def ? 'In use' : 'Tap to use') + '</span></span>'
+        + (d.def ? TICK : '') + '</button>';
+    }).join(''));
+    $('outList').hidden = !outs.length;
+    $('btEntry').hidden = !btAvailable(s);
+    $('btEntrySub').textContent = bt.radio === 'on' ? connectedName(bt) : bt.radio === 'off' ? 'Bluetooth is off' : '';
+    $('testSound').disabled = busy;
+    var eff = a.effective || a.stream;
+    var note = a.error || '';
+    if (!note && a.pinned && eff === 'laptop') note = 'This stream started with "Play audio on PC" off, so Sunshine holds the sound on the phone. Start the stream again.';
+    else if (!note && (a.stuck || []).length) note = 'Still on the ' + (eff === 'laptop' ? 'phone' : 'laptop') + ': ' + a.stuck.join(', ') + '. Restart it to move it.';
+    else if (!note && a.stream === 'auto') note = s.streaming ? (eff === 'phone' ? 'Away from home: plays on your phone.' : 'At home: plays on the laptop.') : 'Laptop at home, phone away.';
+    else if (!note && a.stream && s.streaming && !s.paused) note = 'Switching between laptop and phone takes full effect when the stream starts again.';
+    $('soundNote').textContent = note;
+  }
+
+  function renderDisplay(s) {
+    var d = s.display || {};
+    $('resAuto').setAttribute('aria-checked', d.auto ? 'true' : 'false'); $('resAuto').disabled = busy;
+    $('resAutoSub').textContent = 'While streaming' + (d.target ? ' · ' + d.target.replace('x', '×') : ', pick one below');
+    var html = (d.modes || []).slice(0, 8).map(function (m) {
+      var cur = m === d.current, tgt = m === d.target;
+      return '<button class="row' + (cur ? ' on' : '') + '" data-res="' + esc(m) + '"' + (busy ? ' disabled' : '') + '><span class="name"><b>' + esc(m.replace('x', '×')) + (m === d.native ? ' (laptop)' : '') + '</b><span>'
+        + (cur ? 'Now' : tgt ? 'For streams' : 'Tap to use') + '</span></span>' + (tgt ? TICK : '') + '</button>';
+    }).join('');
+    setHtml($('resList'), html);
+    $('resList').hidden = !html;
+    $('resRestore').disabled = busy || d.current === d.native;
+    $('resNote').textContent = d.error || '';
+  }
+
+  function renderLegion(s) {
+    var lg = s.legion || {};
+    var avail = lg.state === 'ok';
+    setHtml($('modes'), (lg.modes || [1, 2, 3]).map(function (m) {
+      var md = MODES[m] || { name: 'Mode ' + m, color: '#888' };
+      return '<button class="mode' + (avail && lg.mode === m ? ' on' : '') + '" data-mode="' + m + '" style="--c:' + md.color + '"' + (busy || !avail ? ' disabled' : '') + '><i></i><span>' + md.name + '</span></button>';
+    }).join(''));
+    $('legionAuto').setAttribute('aria-checked', lg.auto ? 'true' : 'false'); $('legionAuto').disabled = busy;
+    $('legionNote').textContent = !avail ? (lg.state === 'needsAdmin' ? 'Needs Legion controls: on the laptop, tray icon → Legion mode → Turn on Legion controls.' : 'Not available on this laptop.')
+      : (s.battery && s.battery.has && !s.battery.plugged ? 'Performance needs the charger.' : '');
+  }
+
+  function renderBt(s) {
+    var bt = s.bluetooth || {};
+    var on = bt.radio === 'on';
+    $('btRadio').setAttribute('aria-checked', on ? 'true' : 'false'); $('btRadio').disabled = busy || bt.busy;
+    $('btRadioSub').textContent = bt.busy ? 'Working…' : on ? 'On' : bt.radio === 'off' ? 'Off' : '–';
+    var html = (bt.devices || []).map(function (d) {
+      var connecting = bt.connecting === d.key;
+      return '<div class="row' + (d.connected ? ' on' : '') + '"><span class="name"><b>' + esc(d.name) + '</b><span>' + (connecting ? 'Connecting…' : d.connected ? 'Connected' : 'Paired') + '</span></span>'
+        + (d.connected ? TICK : '<button class="pill" data-bt="' + esc(d.key) + '"' + (busy || bt.busy || connecting ? ' disabled' : '') + '>Connect</button>') + '</div>';
+    }).join('');
+    setHtml($('btList'), html);
+    $('btList').hidden = !html;
+    $('btNote').textContent = bt.message || '';
+  }
+
+  function renderPower(s) {
+    var p = s.plug || {}, ts = s.tailscale, su = s.sunshine;
+    $('plugBox').hidden = !p.configured;
+    $('plugRow').setAttribute('aria-checked', p.on ? 'true' : 'false'); $('plugRow').disabled = busy || p.busy;
+    $('plugSub').textContent = p.busy ? 'Working…' : p.on ? 'On' + (p.watts ? ' · ' + Math.round(p.watts) + ' W' : '') : 'Off';
+    $('plugAuto').setAttribute('aria-checked', p.auto ? 'true' : 'false'); $('plugAuto').disabled = busy;
+    $('awakeRow').setAttribute('aria-checked', s.keepAwake ? 'true' : 'false'); $('awakeRow').disabled = busy;
+    $('tsRow').hidden = !ts || !ts.state || ts.state === 'missing';
+    if (ts) {
+      $('tsRow').setAttribute('aria-checked', ts.state === 'on' ? 'true' : 'false'); $('tsRow').disabled = busy || ts.busy;
+      $('tsSub').textContent = ts.state === 'on' ? 'Connected' + (ts.ip ? ' · ' + ts.ip : '') : ts.state === 'login' ? 'Sign-in needed on the laptop' : ts.state === 'starting' ? 'Connecting…' : 'Off';
+    }
+    $('sunRow').hidden = !su || !su.installed;
+    if (su) {
+      $('sunName').textContent = 'Restart ' + (su.name || 'Sunshine');
+      $('sunSub').textContent = su.state === 'restarting' ? 'Restarting…' : su.message || 'Ends this stream';
+      $('sunRow').disabled = busy || su.state === 'restarting';
+    }
+    $('offBtn').disabled = busy;
+    var sd = s.shutdown || {};
+    $('powerNote').textContent = sd.phase && sd.phase !== 'idle' ? 'Turning off…' : p.message || '';
+  }
+
+  // --------------------------------------------------------------- actions
+  function askRestartSunshine() {
+    var name = (state && state.sunshine && state.sunshine.name) || 'Sunshine';
+    ask('Restart ' + name + '?', 'This stream ends. Games keep running, and Moonlight can connect again in about 10 seconds.', 'Restart', true,
+      function () { act('sunshine/restart'); });
+  }
+  function askTurnOff() {
+    ask('Turn off the laptop?', 'Games and apps close first, then the laptop shuts down. Unsaved work in other apps is lost.', 'Turn off', true,
+      function () { act('shutdown', 'Turning off'); });
+  }
+  $('grid').addEventListener('click', function (e) {
+    var tile = e.target.closest('[data-tool]');
+    if (!tile || !state) return;
+    switch (tile.getAttribute('data-tool')) {
+      case 'screen': act(state.screenOff ? 'screen/on' : 'screen/off'); break;
+      case 'awake': act(state.keepAwake ? 'awake/off' : 'awake/on'); break;
+      case 'test': act('audio/test', 'Playing a tone on the laptop'); break;
+      case 'sound': showTab('sound'); break;
+      case 'res': showTab('display'); break;
+      case 'legion': showTab('legion'); break;
+      case 'bt': showTab('bt', 'tools'); break;
+      case 'sunshine': askRestartSunshine(); break;
+      case 'off': askTurnOff(); break;
+    }
+  });
+  $('offBtn').addEventListener('click', askTurnOff);
+  $('sunRow').addEventListener('click', askRestartSunshine);
+  $('soundSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-sound]'); if (!b || !state) return;
+    if (b.getAttribute('data-sound') !== (state.audio || {}).stream) act('audio/stream/' + b.getAttribute('data-sound'));
+  });
+  $('outList').addEventListener('click', function (e) { var r = e.target.closest('[data-out]'); if (r) act('audio/out/' + r.getAttribute('data-out')); });
+  $('testSound').addEventListener('click', function () { act('audio/test', 'Playing a tone on the laptop'); });
+  $('resAuto').addEventListener('click', function () { act(state.display && state.display.auto ? 'res/auto/off' : 'res/auto/on'); });
+  $('resList').addEventListener('click', function (e) { var r = e.target.closest('[data-res]'); if (r) act('res/set/' + r.getAttribute('data-res')); });
+  $('resRestore').addEventListener('click', function () { act('res/restore'); });
+  $('modes').addEventListener('click', function (e) { var m = e.target.closest('[data-mode]'); if (m) act('legion/' + m.getAttribute('data-mode')); });
+  $('legionAuto').addEventListener('click', function () { act(state.legion && state.legion.auto ? 'legion/auto/off' : 'legion/auto/on'); });
+  $('btRadio').addEventListener('click', function () { act(state.bluetooth && state.bluetooth.radio === 'on' ? 'bt/off' : 'bt/on'); });
+  $('btList').addEventListener('click', function (e) { var b = e.target.closest('[data-bt]'); if (b) act('bt/connect/' + b.getAttribute('data-bt')); });
+  $('plugRow').addEventListener('click', function () {
+    if (!state.plug) return;
+    if (state.plug.on) ask('Switch the plug off?', 'The laptop keeps running on its battery.', 'Switch off', false, function () { act('plug/off'); });
+    else act('plug/on');
+  });
+  $('plugAuto').addEventListener('click', function () { act(state.plug && state.plug.auto ? 'plug/auto/off' : 'plug/auto/on'); });
+  $('awakeRow').addEventListener('click', function () { act(state.keepAwake ? 'awake/off' : 'awake/on'); });
+  $('tsRow').addEventListener('click', function () {
+    var ts = state.tailscale; if (!ts) return;
+    if (ts.state !== 'on') { act('tailscale/on'); return; }
+    ask('Turn off Tailscale?', 'If this stream goes through Tailscale (away from home), it stops.', 'Turn off', true, function () { act('tailscale/off'); });
+  });
+  $('confirmNo').addEventListener('click', function () { hideConfirm(); });
+  $('confirmYes').addEventListener('click', function () { var a = confirmAction; hideConfirm(); if (a) a(); });
+
+  // --------------------------------------------------------------- Moonlight's own numbers
+  function grade(el, value, unit, goodMax, warnMax, higherIsBetter) {
+    if (value == null || value < 0) { el.textContent = '–'; el.className = 'v'; return; }
+    var v = Math.round(value);
+    el.innerHTML = v + '<small>' + unit + '</small>';
+    var good = higherIsBetter ? v >= goodMax : v <= goodMax, ok = higherIsBetter ? v >= warnMax : v <= warnMax;
+    el.className = 'v ' + (good ? 'good' : ok ? 'warn' : 'bad');
+  }
+  function stats() {
+    clearTimeout(statsTimer);
+    if (!shown) return;
+    var m = app(), st = null;
+    try { st = m && m.stats ? JSON.parse(m.stats()) : null; } catch (e) { st = null; }
+    grade($('statNet'), st ? st.rtt : null, ' ms', 30, 60, false);
+    grade($('statFps'), st ? st.fps : null, ' fps', 55, 40, true);
+    statsTimer = setTimeout(stats, 1000);
+  }
+
+  // Moonlight CM calls these when the panel slides in and out, so nothing polls while it's hidden.
+  window.cmPanel = {
+    shown: function () { if (shown) return; shown = true; poll(); stats(); },
+    hidden: function () { shown = false; clearTimeout(pollTimer); clearTimeout(statsTimer); hideConfirm(); },
+    back: function () {
+      if (!$('confirm').hidden) { hideConfirm(); return true; }
+      if (current === 'bt') { showTab(backTo === 'bt' ? 'tools' : backTo); return true; }
+      if (current !== 'tools') { showTab('tools'); return true; }
+      return false;
+    }
+  };
+  poll(); stats();
+})();
+</script>
+</body>
+</html>
