@@ -369,7 +369,9 @@
   function setHtml(el, html) { if (el.getAttribute('data-html') !== html) { el.innerHTML = html; el.setAttribute('data-html', html); } }
 
   function legionAvailable(s) { var lg = s.legion || {}; return !!lg.state && lg.state !== 'none'; }
-  function btAvailable(s) { var bt = s.bluetooth || {}; return !!bt.radio && bt.radio !== 'none'; }
+  // CouchMode reports the radio as On, Off, Disabled, Unknown or None (no Bluetooth); compared in lower case.
+  function radioOf(bt) { return String((bt && bt.radio) || '').toLowerCase(); }
+  function btAvailable(s) { var r = radioOf(s.bluetooth); return !!r && r !== 'none'; }
 
   function connectedName(bt) {
     var c = (bt.devices || []).filter(function (d) { return d.connected; });
@@ -387,7 +389,7 @@
       { id: 'legion', t: 'Legion mode', s: lg.state === 'ok' ? (MODES[lg.mode] || {}).name || 'Custom' : 'Off', tab: 'legion', hide: !legionAvailable(s) },
       { id: 'awake', t: 'Keep awake', s: s.keepAwake ? 'On' : 'Off', on: !!s.keepAwake },
       { id: 'test', t: 'Test sound', s: 'Short tone' },
-      { id: 'bt', t: 'Bluetooth', s: bt.radio === 'on' ? connectedName(bt) : bt.radio === 'off' ? 'Off' : '–', tab: 'bt', hide: !btAvailable(s) },
+      { id: 'bt', t: 'Bluetooth', s: radioOf(bt) === 'on' ? connectedName(bt) : radioOf(bt) === 'off' ? 'Off' : '–', tab: 'bt', hide: !btAvailable(s) },
       { id: 'sunshine', t: su && su.name || 'Sunshine', s: su && su.state === 'restarting' ? 'Restarting…' : 'Restart', hide: !su || !su.installed, busy: su && su.state === 'restarting' },
       { id: 'off', t: 'Turn off', s: 'Laptop' }
     ];
@@ -443,7 +445,7 @@
     }).join(''));
     $('outList').hidden = !outs.length;
     $('btEntry').hidden = !btAvailable(s);
-    $('btEntrySub').textContent = bt.radio === 'on' ? connectedName(bt) : bt.radio === 'off' ? 'Bluetooth is off' : '';
+    $('btEntrySub').textContent = radioOf(bt) === 'on' ? connectedName(bt) : radioOf(bt) === 'off' ? 'Bluetooth is off' : '';
     $('testSound').disabled = busy;
     var eff = a.effective || a.stream;
     var note = a.error || '';
@@ -485,9 +487,9 @@
 
   function renderBt(s) {
     var bt = s.bluetooth || {};
-    var on = bt.radio === 'on';
+    var on = radioOf(bt) === 'on';
     $('btRadio').setAttribute('aria-checked', on ? 'true' : 'false'); $('btRadio').disabled = busy || bt.busy;
-    $('btRadioSub').textContent = bt.busy ? 'Working…' : on ? 'On' : bt.radio === 'off' ? 'Off' : '–';
+    $('btRadioSub').textContent = bt.busy ? 'Working…' : on ? 'On' : radioOf(bt) === 'off' ? 'Off' : radioOf(bt) === 'disabled' ? 'Turned off in Device Manager' : '–';
     var html = (bt.devices || []).map(function (d) {
       var connecting = bt.connecting === d.key;
       return '<div class="row' + (d.connected ? ' on' : '') + '"><span class="name"><b>' + esc(d.name) + '</b><span>' + (connecting ? 'Connecting…' : d.connected ? 'Connected' : 'Paired') + '</span></span>'
@@ -615,7 +617,7 @@
   $('resRestore').addEventListener('click', function () { act('res/restore'); });
   $('modes').addEventListener('click', function (e) { var m = e.target.closest('[data-mode]'); if (m) act('legion/' + m.getAttribute('data-mode')); });
   $('legionAuto').addEventListener('click', function () { act(state.legion && state.legion.auto ? 'legion/auto/off' : 'legion/auto/on'); });
-  $('btRadio').addEventListener('click', function () { act(state.bluetooth && state.bluetooth.radio === 'on' ? 'bt/off' : 'bt/on'); });
+  $('btRadio').addEventListener('click', function () { act(radioOf(state && state.bluetooth) === 'on' ? 'bt/off' : 'bt/on'); });
   $('btList').addEventListener('click', function (e) { var b = e.target.closest('[data-bt]'); if (b) act('bt/connect/' + b.getAttribute('data-bt')); });
   $('plugRow').addEventListener('click', function () {
     if (!state.plug) return;
