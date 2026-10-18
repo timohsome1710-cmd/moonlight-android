@@ -20,7 +20,7 @@ public class AndroidAudioRenderer implements AudioRenderer {
 
     private AudioTrack track;
 
-    private final boolean muted; // Moonlight CM: the PC plays the sound (CouchMode), so this phone stays silent
+    private volatile boolean muted; // Moonlight CM: the PC plays the sound (CouchMode), so this phone stays silent
 
     public AndroidAudioRenderer(Context context, boolean enableAudioFx) {
         this(context, enableAudioFx, false);
@@ -30,6 +30,21 @@ public class AndroidAudioRenderer implements AudioRenderer {
         this.context = context;
         this.enableAudioFx = enableAudioFx;
         this.muted = muted;
+    }
+
+    /** Moonlight CM: CouchMode's sound choice changed mid-stream (Laptop: silent here, Phone: play here). */
+    public void setMuted(boolean mute) {
+        if (muted == mute) return;
+        muted = mute;
+        AudioTrack t = track;
+        if (t != null) {
+            try {
+                t.setVolume(mute ? 0f : AudioTrack.getMaxVolume());
+            } catch (Exception e) {
+                LimeLog.warning("Couldn't change the audio volume: " + e);
+            }
+        }
+        LimeLog.info(mute ? "Audio muted on this device: CouchMode plays it on the PC" : "Audio playing on this device again");
     }
 
     private AudioTrack createAudioTrack(int channelConfig, int sampleRate, int bufferSize, boolean lowLatency) {

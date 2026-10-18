@@ -9,7 +9,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Locale;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Moonlight CM: asks CouchMode on the PC (if it runs there) where the stream's sound should play, so
@@ -23,6 +23,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class CouchModeSound {
 
     public static final int UNKNOWN = 0, LAPTOP = 1, PHONE = 2;
+
+    /**
+     * CouchMode's answer. live: CouchMode (1.23 and newer) can move the sound between the laptop and
+     * Steam Streaming Speakers during the stream, so "Play audio on PC" stays on and this phone mutes
+     * or unmutes itself as the choice changes (the choice is no longer fixed when the stream starts).
+     */
+    public static final class Answer {
+        public final int sound;
+        public final boolean live;
+        Answer(int sound, boolean live) { this.sound = sound; this.live = live; }
+    }
+
+    private static final Answer NONE = new Answer(UNKNOWN, false);
     private static final int COUCHMODE_PORT = 8642;
 
     private CouchModeSound() {}
@@ -33,9 +46,9 @@ public final class CouchModeSound {
      * (used when CouchMode has no choice), so CouchMode knows what this stream uses even when it's a
      * resumed one (Sunshine runs no command then).
      */
-    public static int ask(final String host, final int timeoutMs, final boolean ownHostAudio) {
-        if (host == null || host.isEmpty()) return UNKNOWN;
-        final AtomicInteger answer = new AtomicInteger(UNKNOWN);
+    public static Answer ask(final String host, final int timeoutMs, final boolean ownHostAudio) {
+        if (host == null || host.isEmpty()) return NONE;
+        final AtomicReference<Answer> answer = new AtomicReference<>(NONE);
         Thread t = new Thread(new Runnable() {
             @Override public void run() { answer.set(fetch(host, timeoutMs, ownHostAudio)); }
         }, "CouchMode sound");
@@ -47,30 +60,31 @@ public final class CouchModeSound {
         return answer.get();
     }
 
-    private static int fetch(String host, int timeoutMs, boolean ownHostAudio) {
+    private static Answer fetch(String host, int timeoutMs, boolean ownHostAudio) {
         HttpURLConnection c = null;
         try {
             String h = host.contains(":") && !host.startsWith("[") ? "[" + host + "]" : host; // IPv6
             URL u = new URL("http://" + h + ":" + COUCHMODE_PORT + "/couchmode/sound?client=moonlight-cm"
-                    + "&tailscale=" + (isTailscale(host) ? "1" : "0") + "&fallback=" + (ownHostAudio ? "1" : "0"));
+                    + "&tailscale=" + (isTailscale(host) ? "1" : "0") + "&fallback=" + (ownHostAudio ? "1" : "0") + "&live=1");
             c = (HttpURLConnection) u.openConnection();
             c.setConnectTimeout(timeoutMs);
             c.setReadTimeout(timeoutMs);
             c.setUseCaches(false);
-            if (c.getResponseCode() != 200) return UNKNOWN;
+            if (c.getResponseCode() != 200) return NONE;
             JSONObject j = new JSONObject(read(c.getInputStream()));
-            if (!"CouchMode".equals(j.optString("app"))) return UNKNOWN;
+            if (!"CouchMode".equals(j.optString("app"))) return NONE;
+            boolean live = j.optBoolean("live", false);
             String stream = j.optString("stream", "");
             int result = UNKNOWN;
             if ("laptop".equals(stream)) result = LAPTOP;
             else if ("phone".equals(stream)) result = PHONE;
             else if ("auto".equals(stream)) result = isTailscale(host) ? PHONE : LAPTOP;
             LimeLog.info("CouchMode sound choice: " + (stream.isEmpty() ? "(none)" : stream) + " -> "
-                    + (result == LAPTOP ? "PC" : result == PHONE ? "phone" : "unchanged"));
-            return result;
+                    + (result == LAPTOP ? "PC" : result == PHONE ? "phone" : "unchanged") + (live ? " (switchable mid-stream)" : ""));
+            return new Answer(result, live && result != UNKNOWN);
         } catch (Exception e) {
             LimeLog.info("CouchMode didn't answer: " + e);
-            return UNKNOWN;
+            return NONE;
         } finally {
             if (c != null) c.disconnect();
         }

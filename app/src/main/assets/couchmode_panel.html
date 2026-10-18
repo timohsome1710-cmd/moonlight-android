@@ -126,6 +126,21 @@
   .btn { display: block; width: 100%; margin-top: 8px; padding: 10px; border-radius: 999px; background: var(--tile); font-size: 13px; font-weight: 500; text-align: center; }
   .btn:active { background: var(--tile-press); }
   .btn.danger { color: #ff9a9e; background: rgba(255, 107, 107, .1); }
+  /* Laptop volume: a game-assistant style pill slider */
+  .vol { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .vol-track { position: relative; flex: 1; min-width: 0; height: 40px; border-radius: 20px; background: var(--tile); overflow: hidden; touch-action: none; cursor: pointer; }
+  .vol-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 40px; border-radius: 20px; background: #e4e4e0; }
+  .vol.dragging .vol-fill { transition: none; }
+  .vol-fill { transition: width .12s ease-out; }
+  .vol-icon { position: absolute; left: 11px; top: 11px; width: 18px; height: 18px; color: #1b1b1d; pointer-events: none; }
+  .vol-pct { position: absolute; right: 14px; top: 0; line-height: 40px; font-size: 12px; font-weight: 600; color: var(--dim); pointer-events: none; }
+  .vol-pct.over { color: #1b1b1d; }
+  .vol.muted .vol-fill { background: var(--faint); }
+  .vol-mute { flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--tile); color: var(--dim); display: grid; place-items: center; }
+  .vol-mute svg { width: 18px; height: 18px; }
+  .vol-mute:active { background: var(--tile-press); }
+  .vol.muted .vol-mute { background: var(--accent); color: var(--on-accent); }
+  .vol-name { margin: 5px 2px 0; font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .mode { height: 62px; min-width: 0; padding: 0 3px; border-radius: 18px; background: var(--tile); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; font-size: 11.5px; font-weight: 600; letter-spacing: -.1px; text-align: center; }
   .mode span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -184,6 +199,15 @@
       <div class="seg" id="soundSeg" style="--n:3">
         <button data-sound="laptop">Laptop</button><button data-sound="auto">Auto</button><button data-sound="phone">Phone</button>
       </div>
+      <div class="vol" id="volBox" hidden>
+        <div class="vol-track" id="volTrack" role="slider" aria-label="Laptop volume" aria-valuemin="0" aria-valuemax="100">
+          <div class="vol-fill" id="volFill"></div>
+          <svg class="vol-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+          <span class="vol-pct" id="volPct"></span>
+        </div>
+        <button class="vol-mute" id="volMute" aria-label="Mute the laptop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg></button>
+      </div>
+      <p class="vol-name" id="volName" hidden></p>
       <p class="label">Laptop output</p>
       <div class="list" id="outList"></div>
       <div class="list" id="btEntry">
@@ -254,7 +278,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
   var state = null, busy = false, shown = true, pollTimer = null, statsTimer = null, failures = 0, confirmAction = null;
-  var current = 'tools', backTo = 'tools';
+  var current = 'tools', backTo = 'tools', lastSound = '';
+  var vol = { pct: null, muted: false, touchedAt: 0, sending: false, pending: false, dragging: false };
   var MODES = { 1: { name: 'Quiet', color: '#4ea8ff' }, 2: { name: 'Balanced', color: '#f2f2ef' }, 3: { name: 'Performance', color: '#ff6b6b' } };
   var TICK = '<svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
   var ICONS = {
@@ -399,6 +424,13 @@
     if (s.audio && s.audio.pinned && s.audio.effective === 'laptop') tn = 'Sunshine holds the sound on the phone for this stream. Start the stream again to switch.';
     $('toolsNote').textContent = tn;
     renderSound(s); renderDisplay(s); renderLegion(s); renderBt(s); renderPower(s);
+    // Moonlight CM mutes or unmutes this phone to match (when the stream allows switching mid-stream).
+    var eff = s.streaming ? ((s.audio || {}).effective || '') : '';
+    if (eff && eff !== lastSound) {
+      lastSound = eff;
+      var m = app();
+      if (m && m.setSound) m.setSound(eff);
+    }
   }
 
   function renderSound(s) {
@@ -418,8 +450,10 @@
     if (!note && a.pinned && eff === 'laptop') note = 'This stream started with "Play audio on PC" off, so Sunshine holds the sound on the phone. Start the stream again.';
     else if (!note && (a.stuck || []).length) note = 'Still on the ' + (eff === 'laptop' ? 'phone' : 'laptop') + ': ' + a.stuck.join(', ') + '. Restart it to move it.';
     else if (!note && a.stream === 'auto') note = s.streaming ? (eff === 'phone' ? 'Away from home: plays on your phone.' : 'At home: plays on the laptop.') : 'Laptop at home, phone away.';
+    else if (!note && a.live && s.streaming) note = eff === 'phone' ? 'Plays on this phone now; the laptop stays quiet.' : 'Plays on the laptop now; this phone stays quiet.';
     else if (!note && a.stream && s.streaming && !s.paused) note = 'Switching between laptop and phone takes full effect when the stream starts again.';
     $('soundNote').textContent = note;
+    renderVolume(a);
   }
 
   function renderDisplay(s) {
@@ -486,6 +520,62 @@
     var sd = s.shutdown || {};
     $('powerNote').textContent = sd.phase && sd.phase !== 'idle' ? 'Turning off…' : p.message || '';
   }
+
+  // --------------------------------------------------------------- laptop volume
+  function renderVolume(a) {
+    var lv = a.laptopVolume;
+    $('volBox').hidden = $('volName').hidden = !lv;
+    if (!lv) return;
+    $('volName').textContent = 'Laptop volume · ' + lv.name;
+    if (!vol.dragging && Date.now() - vol.touchedAt > 1500) { vol.pct = lv.pct; vol.muted = lv.muted; }
+    paintVolume();
+  }
+  function paintVolume() {
+    var p = vol.pct == null ? 0 : vol.pct;
+    $('volFill').style.width = 'calc(40px + (100% - 40px) * ' + (p / 100) + ')';
+    $('volPct').textContent = vol.muted ? 'Muted' : p + '%';
+    $('volPct').classList.toggle('over', p > 82 && !vol.muted);
+    $('volBox').classList.toggle('muted', vol.muted);
+    $('volTrack').setAttribute('aria-valuenow', String(p));
+  }
+  function sendVolume() {
+    if (vol.sending) { vol.pending = true; return; } // the latest value goes out when this one is done
+    vol.sending = true; vol.pending = false;
+    request('POST', 'api/audio/volume/' + vol.pct).then(function (s) { state = s; failures = 0; })
+      .catch(function (e) { if (!rejected(e)) toast('Couldn\'t reach the laptop'); })
+      .then(function () { vol.sending = false; if (vol.pending) sendVolume(); });
+  }
+  (function () {
+    var track = $('volTrack');
+    function at(e) {
+      var r = track.getBoundingClientRect();
+      return Math.round(Math.max(0, Math.min(1, (e.clientX - r.left - 20) / Math.max(1, r.width - 40))) * 100);
+    }
+    function hold(on) { var m = app(); if (m && m.holdTouch) m.holdTouch(on); }
+    function set(e) {
+      var p = at(e);
+      vol.touchedAt = Date.now();
+      if (p === vol.pct && !vol.muted) return;
+      vol.pct = p; if (p > 0) vol.muted = false;
+      paintVolume(); sendVolume();
+    }
+    track.addEventListener('pointerdown', function (e) {
+      hold(true); vol.dragging = true; $('volBox').classList.add('dragging');
+      try { track.setPointerCapture(e.pointerId); } catch (x) {}
+      set(e); e.preventDefault();
+    });
+    track.addEventListener('pointermove', function (e) { if (vol.dragging) set(e); });
+    function end() {
+      if (!vol.dragging) return;
+      vol.dragging = false; vol.touchedAt = Date.now(); $('volBox').classList.remove('dragging'); hold(false);
+    }
+    track.addEventListener('pointerup', end);
+    track.addEventListener('pointercancel', end);
+    $('volMute').addEventListener('click', function () {
+      vol.muted = !vol.muted; vol.touchedAt = Date.now(); paintVolume();
+      act(vol.muted ? 'audio/mute/on' : 'audio/mute/off');
+    });
+  })();
 
   // --------------------------------------------------------------- actions
   function askRestartSunshine() {
@@ -562,7 +652,7 @@
 
   // Moonlight CM calls these when the panel slides in and out, so nothing polls while it's hidden.
   window.cmPanel = {
-    shown: function () { if (shown) return; shown = true; poll(); stats(); },
+    shown: function () { if (shown) return; shown = true; lastSound = ''; poll(); stats(); },
     hidden: function () { shown = false; clearTimeout(pollTimer); clearTimeout(statsTimer); hideConfirm(); },
     back: function () {
       if (!$('confirm').hidden) { hideConfirm(); return true; }

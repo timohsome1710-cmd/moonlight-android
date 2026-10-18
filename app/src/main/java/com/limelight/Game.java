@@ -123,6 +123,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private NvConnection conn;
     private SpinnerDialog spinner;
     private int couchModeSound = CouchModeSound.UNKNOWN; // Moonlight CM: where CouchMode wants the sound
+    private boolean couchModeLive; // Moonlight CM: Play audio on PC stays on; this phone mutes itself as CouchMode's choice changes
+    private AndroidAudioRenderer audioRenderer;
     private CouchModePanel couchPanel; // Moonlight CM: CouchMode's side panel (handle on the left edge)
     private boolean couchPanelAteBack;
     private boolean displayedFailureDialog = false;
@@ -324,6 +326,9 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             couchPanel = new CouchModePanel(this, host, new Runnable() {
                 @Override public void run() { streamView.requestFocus(); }
             });
+            couchPanel.setSoundListener(new CouchModePanel.SoundListener() {
+                @Override public void onSound(String effective) { couchModeSoundChanged(effective); }
+            });
             couchPanel.attach((ViewGroup) findViewById(android.R.id.content));
         }
         int port = Game.this.getIntent().getIntExtra(EXTRA_PORT, NvHTTP.DEFAULT_HTTP_PORT);
@@ -478,11 +483,18 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
 
         // Moonlight CM: "Play audio on PC" follows CouchMode's Laptop / Auto / Phone choice when it runs on the PC
+        // With CouchMode 1.23 and newer ("live"), Play audio on PC always stays on: CouchMode moves the sound
+        // between the laptop and Steam Streaming Speakers, and this phone mutes itself while it's on the
+        // laptop, so Laptop / Phone can be switched during the stream (Sunshine never locks it to the phone).
         boolean playHostAudio = prefConfig.playHostAudio;
         couchModeSound = CouchModeSound.UNKNOWN;
+        couchModeLive = false;
         if (prefConfig.followCouchMode) {
-            couchModeSound = CouchModeSound.ask(host, 700, prefConfig.playHostAudio);
-            if (couchModeSound == CouchModeSound.LAPTOP) playHostAudio = true;
+            CouchModeSound.Answer answer = CouchModeSound.ask(host, 700, prefConfig.playHostAudio);
+            couchModeSound = answer.sound;
+            couchModeLive = answer.live;
+            if (couchModeLive) playHostAudio = true;
+            else if (couchModeSound == CouchModeSound.LAPTOP) playHostAudio = true;
             else if (couchModeSound == CouchModeSound.PHONE) playHostAudio = false;
         }
 
@@ -1354,6 +1366,18 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     private byte getModifierState() {
         return (byte) modifierFlags;
+    }
+
+    /** Moonlight CM: the sound was switched in the CouchMode panel; follow it here if the stream allows. */
+    private void couchModeSoundChanged(String effective) {
+        if (!couchModeLive || audioRenderer == null) return; // older CouchMode: the choice is fixed per stream
+        if ("laptop".equals(effective)) {
+            couchModeSound = CouchModeSound.LAPTOP;
+            audioRenderer.setMuted(prefConfig.muteWhenPcPlays);
+        } else if ("phone".equals(effective)) {
+            couchModeSound = CouchModeSound.PHONE;
+            audioRenderer.setMuted(false);
+        }
     }
 
     @Override
@@ -2571,9 +2595,9 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             UiHelper.notifyStreamConnecting(Game.this);
 
             decoderRenderer.setRenderTarget(holder);
-            conn.start(new AndroidAudioRenderer(Game.this, prefConfig.enableAudioFx,
-                            prefConfig.muteWhenPcPlays && couchModeSound == CouchModeSound.LAPTOP),
-                    decoderRenderer, Game.this);
+            audioRenderer = new AndroidAudioRenderer(Game.this, prefConfig.enableAudioFx,
+                    prefConfig.muteWhenPcPlays && couchModeSound == CouchModeSound.LAPTOP);
+            conn.start(audioRenderer, decoderRenderer, Game.this);
         }
     }
 

@@ -88,6 +88,14 @@ public class CouchModePanel {
     private boolean open, dragging, pageLoaded, pageShown;
     private String loadedUrl;
     private int animSeq;
+    private SoundListener soundListener;
+    /** The page holds the touch (its volume slider is being dragged): no swipe-to-close meanwhile. */
+    private volatile boolean pageHoldsTouch;
+
+    /** Told where CouchMode plays the stream's sound now ("laptop" or "phone"), as the panel learns it. */
+    public interface SoundListener { void onSound(String effective); }
+
+    public void setSoundListener(SoundListener l) { soundListener = l; }
 
     /** onClosed runs after the panel slides away (to give the stream its input focus back). */
     public CouchModePanel(Activity activity, String streamHost, Runnable onClosed) {
@@ -262,6 +270,7 @@ public class CouchModePanel {
 
         void down(MotionEvent e) {
             downX = e.getRawX(); downY = e.getRawY(); active = false;
+            pageHoldsTouch = false; // the page says so again if this touch lands on its slider
             if (vt != null) vt.recycle();
             vt = VelocityTracker.obtain(); track(vt, e);
         }
@@ -271,7 +280,7 @@ public class CouchModePanel {
             if (vt == null) return false;
             track(vt, e);
             float dx = e.getRawX() - downX, dy = e.getRawY() - downY;
-            if (!active && open && dx < -touchSlop && Math.abs(dx) > Math.abs(dy) * 1.2f) {
+            if (!active && open && !pageHoldsTouch && dx < -touchSlop && Math.abs(dx) > Math.abs(dy) * 1.2f) {
                 active = true;
                 dragging = true;
                 drawer.animate().cancel();
@@ -536,6 +545,14 @@ public class CouchModePanel {
 
         @JavascriptInterface public void close() {
             activity.runOnUiThread(new Runnable() { @Override public void run() { CouchModePanel.this.close(); } });
+        }
+
+        @JavascriptInterface public void holdTouch(boolean hold) { pageHoldsTouch = hold; }
+
+        @JavascriptInterface public void setSound(final String effective) {
+            activity.runOnUiThread(new Runnable() {
+                @Override public void run() { if (soundListener != null && effective != null) soundListener.onSound(effective); }
+            });
         }
 
         @JavascriptInterface public void linkRejected() {
