@@ -91,6 +91,8 @@ public class CouchModePanel {
     private SoundListener soundListener;
     /** The page holds the touch (its volume slider is being dragged): no swipe-to-close meanwhile. */
     private volatile boolean pageHoldsTouch;
+    /** The Keyboard tile was tapped: bring up the phone keyboard once the panel is out of the way. */
+    private boolean keyboardAfterClose;
 
     /** Told where CouchMode plays the stream's sound now ("laptop" or "phone"), as the panel learns it. */
     public interface SoundListener { void onSound(String effective); }
@@ -379,6 +381,7 @@ public class CouchModePanel {
 
     /** Makes the panel visible just off the left edge, ready to slide in. */
     private void prepareToShow() {
+        keyboardAfterClose = false;
         drawer.animate().cancel();
         animSeq++;
         if (drawer.getVisibility() != View.VISIBLE) {
@@ -433,7 +436,32 @@ public class CouchModePanel {
         handle.setVisibility(View.VISIBLE);
         dimHandleLater();
         pageHidden();
-        if (onClosed != null) onClosed.run();
+        if (onClosed != null) onClosed.run(); // the stream view has the focus again
+        if (keyboardAfterClose) {
+            keyboardAfterClose = false;
+            showKeyboardSoon();
+        }
+    }
+
+    /**
+     * The phone keyboard, as the three-finger tap brings it up: typing goes to the laptop. A moment after
+     * the stream view gets its focus back, so the keyboard attaches to the stream and not to the panel.
+     */
+    private void showKeyboardSoon() {
+        root.postDelayed(new Runnable() {
+            @Override public void run() {
+                if (activity instanceof GameGestures && !activity.isFinishing()) ((GameGestures) activity).toggleKeyboard();
+            }
+        }, 120);
+    }
+
+    private void keyboardTapped() {
+        if (isOpen()) {
+            keyboardAfterClose = true;
+            close();
+        } else {
+            showKeyboardSoon();
+        }
     }
 
     public void destroy() {
@@ -548,6 +576,10 @@ public class CouchModePanel {
         }
 
         @JavascriptInterface public void holdTouch(boolean hold) { pageHoldsTouch = hold; }
+
+        @JavascriptInterface public void keyboard() {
+            activity.runOnUiThread(new Runnable() { @Override public void run() { keyboardTapped(); } });
+        }
 
         @JavascriptInterface public void setSound(final String effective) {
             activity.runOnUiThread(new Runnable() {

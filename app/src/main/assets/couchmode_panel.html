@@ -288,7 +288,7 @@
     res: '<path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/>',
     legion: '<path d="M12 13.5 16.5 9"/><path d="M4.5 18a9 9 0 1 1 15 0"/>',
     awake: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
-    test: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+    kbd: '<rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M6.5 14h.01M17.5 14h.01M9.5 14h5"/>',
     bt: '<path d="m7 7 10 10-5 4V3l5 4L7 17"/>',
     sunshine: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4.5h-4.5"/>',
     off: '<path d="M12 3v8"/><path d="M6.3 6.9a8 8 0 1 0 11.4 0"/>'
@@ -382,13 +382,15 @@
     var a = s.audio || {}, d = s.display || {}, lg = s.legion || {}, bt = s.bluetooth || {}, su = s.sunshine;
     var soundName = { laptop: 'On laptop', auto: 'Auto', phone: 'On phone' }[a.stream] || 'Not set';
     if (a.stream === 'auto' && s.streaming) soundName = 'Auto · ' + (a.effective === 'phone' ? 'phone' : 'laptop');
+    var m = app();
     var list = [
+      // Moonlight CM's own: opens the phone keyboard for typing on the laptop (instead of the three-finger tap).
+      { id: 'kbd', t: 'Keyboard', s: 'Type text', local: true, hide: !(m && typeof m.keyboard === 'function') },
       { id: 'screen', t: 'Screen off', s: s.screenOff ? 'Laptop dark' : 'Laptop', on: !!s.screenOff },
       { id: 'sound', t: 'Sound', s: soundName, tab: 'sound' },
       { id: 'res', t: 'Resolution', s: d.current ? d.current.replace('x', '×') : '–', tab: 'display' },
       { id: 'legion', t: 'Legion mode', s: lg.state === 'ok' ? (MODES[lg.mode] || {}).name || 'Custom' : 'Off', tab: 'legion', hide: !legionAvailable(s) },
       { id: 'awake', t: 'Keep awake', s: s.keepAwake ? 'On' : 'Off', on: !!s.keepAwake },
-      { id: 'test', t: 'Test sound', s: 'Short tone' },
       { id: 'bt', t: 'Bluetooth', s: radioOf(bt) === 'on' ? connectedName(bt) : radioOf(bt) === 'off' ? 'Off' : '–', tab: 'bt', hide: !btAvailable(s) },
       { id: 'sunshine', t: su && su.name || 'Sunshine', s: su && su.state === 'restarting' ? 'Restarting…' : 'Restart', hide: !su || !su.installed, busy: su && su.state === 'restarting' },
       { id: 'off', t: 'Turn off', s: 'Laptop' }
@@ -396,7 +398,7 @@
     var html = '';
     list.forEach(function (x) {
       if (x.hide) return;
-      html += '<button class="tile' + (x.on ? ' on' : '') + (x.busy ? ' busy' : '') + '" data-tool="' + x.id + '"' + (busy || x.busy ? ' disabled' : '') + '>'
+      html += '<button class="tile' + (x.on ? ' on' : '') + (x.busy ? ' busy' : '') + '" data-tool="' + x.id + '"' + ((busy && !x.local) || x.busy ? ' disabled' : '') + '>'
         + (x.tab ? '<i class="more"></i>' : '') + svg(ICONS[x.id]) + '<span class="t">' + esc(x.t) + '</span><span class="s">' + esc(x.s) + '</span></button>';
     });
     setHtml($('grid'), html);
@@ -591,11 +593,11 @@
   }
   $('grid').addEventListener('click', function (e) {
     var tile = e.target.closest('[data-tool]');
+    if (tile && tile.getAttribute('data-tool') === 'kbd') { var m = app(); if (m && m.keyboard) m.keyboard(); return; }
     if (!tile || !state) return;
     switch (tile.getAttribute('data-tool')) {
       case 'screen': act(state.screenOff ? 'screen/on' : 'screen/off'); break;
       case 'awake': act(state.keepAwake ? 'awake/off' : 'awake/on'); break;
-      case 'test': act('audio/test', 'Playing a tone on the laptop'); break;
       case 'sound': showTab('sound'); break;
       case 'res': showTab('display'); break;
       case 'legion': showTab('legion'); break;
